@@ -32,6 +32,8 @@ export default defineSchema({
     status: v.string(),
     notes: v.optional(v.string()),
     symptoms: v.optional(v.string()),
+    duration: v.optional(v.string()),
+    reason: v.optional(v.string()),
   })
     .index("by_patient", ["patientId"])
     .index("by_doctor", ["doctorId"]),
