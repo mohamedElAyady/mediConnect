@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { Id } from "./_generated/dataModel"
 
 export const getAppointments = query({
     args: {
@@ -39,12 +40,12 @@ export const getAppointments = query({
             appointments.map(async (appointment) => {
                 const patient = await ctx.db
                     .query("users")
-                    .withIndex("by_clerk_id", (q) => q.eq("clerkId", appointment.patientId))
+                    .withIndex("by_id", (q) => q.eq("_id", appointment.patientId as Id<"users">))
                     .first();
 
                 const doctor = await ctx.db
                     .query("users")
-                    .withIndex("by_clerk_id", (q) => q.eq("clerkId", appointment.doctorId))
+                    .withIndex("by_id", (q) => q.eq("_id", appointment.doctorId as Id<"users">))
                     .first();
 
                 return {

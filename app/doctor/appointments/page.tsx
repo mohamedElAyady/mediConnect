@@ -1,8 +1,8 @@
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { AppointmentsCalendar } from "@/components/appointments/appointments-calendar";
 import { AppointmentsFilters } from "@/components/appointments/appointments-filters";
 import { AppointmentsList } from "@/components/appointments/appointments-list";
+import { DoctorCalendar } from "@/components/appointments/doctor-calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarDays, List } from "lucide-react";
 
@@ -31,7 +31,7 @@ export default function DoctorAppointmentsPage() {
           <AppointmentsList />
         </TabsContent>
         <TabsContent value="calendar" className="mt-4">
-          <AppointmentsCalendar />
+          <DoctorCalendar />
         </TabsContent>
       </Tabs>
     </DashboardShell>
