@@ -12,11 +12,13 @@ export default defineSchema({
     bio: v.optional(v.string()),
     avatar: v.optional(v.string()),
     rating: v.optional(v.number()),
+    isPublished: v.optional(v.boolean()),
     reviews: v.optional(v.number()),
     distance: v.optional(v.string()),
     education: v.optional(v.string()),
     experience: v.optional(v.string()),
     languages: v.optional(v.array(v.string())),
+    licenseNumber: v.optional(v.string()),
     acceptingNewPatients: v.optional(v.boolean()),
     consultationFee: v.optional(v.number()),
     availableDates: v.optional(v.array(v.string())),
@@ -33,6 +35,29 @@ export default defineSchema({
       ),
     ),
     pricing: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    gender: v.optional(v.string()),
+    dateOfBirth: v.optional(v.string()),
+    address: v.optional(v.string()),
+    bloodType: v.optional(v.string()), 
+    allergies: v.optional(v.array(v.string())),
+    conditions: v.optional(v.array(v.string())),
+    preferences: v.optional(
+      v.object({
+        emailNotifications: v.boolean(),
+        smsNotifications: v.boolean(),
+        appointmentReminders: v.boolean(),
+        marketingEmails: v.boolean(),
+      }),
+    ),
+    languageProficiencies: v.optional(
+      v.array(
+        v.object({
+          language: v.string(),
+          proficiency: v.string(),
+        }),
+      ),
+    ),
   }).index("by_clerk_id", ["clerkId"]),
 
   integrations: defineTable({
@@ -75,19 +100,37 @@ export default defineSchema({
     duration: v.optional(v.string()),
     reason: v.optional(v.string()),
     cancellationReason: v.optional(v.string()),
+    meetingLink: v.optional(v.string()),
   })
     .index("by_patient", ["patientId"])
     .index("by_doctor", ["doctorId"]),
 
-  messages: defineTable({
-    senderId: v.string(),
-    receiverId: v.string(),
-    content: v.string(),
-    read: v.boolean(),
-    appointmentId: v.optional(v.string()),
+  conversations: defineTable({
+    participant1Id: v.id("users"),
+    participant2Id: v.id("users"),
+    lastMessage: v.string(),
+    lastMessageTime: v.string(),
+    unreadCount1: v.number(),
+    unreadCount2: v.number(),
+    isFavorite1: v.boolean(),
+    isFavorite2: v.boolean(),
+    lastSeen1: v.string(),
+    lastSeen2: v.string(),
+    nextAppointment: v.optional(v.string()),
   })
-    .index("by_sender", ["senderId"])
-    .index("by_receiver", ["receiverId"]),
+    .index("by_participant1", ["participant1Id"])
+    .index("by_participant2", ["participant2Id"])
+    .index("by_participants", ["participant1Id", "participant2Id"]),
+
+  messages: defineTable({
+    conversationId: v.id("conversations"),
+    senderId: v.id("users"),
+    content: v.string(),
+    timestamp: v.string(),
+    read: v.boolean(),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_sender", ["senderId"]),
 
   medicalRecords: defineTable({
     patientId: v.string(),

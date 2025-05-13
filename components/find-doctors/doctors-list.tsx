@@ -28,6 +28,8 @@ import {
   Award,
   CheckCircle2,
   Loader2,
+  MessageCircle,
+  Info,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useUser } from "@clerk/nextjs";
@@ -60,24 +62,27 @@ export function DoctorsList() {
   // Filter doctors based on search params
   const filteredDoctors =
     doctors?.page?.filter((doctor) => {
+      if (!doctor.isPublished) return false;
+
       const query = searchParams.get("query")?.toLowerCase();
       const specialty = searchParams.get("specialty")?.toLowerCase();
       const location = searchParams.get("location")?.toLowerCase();
       const gender = searchParams.get("gender")?.toLowerCase();
       const rating = searchParams.get("rating");
       const insurances = searchParams.get("insurances")?.split(",");
+      const minPrice = Number(searchParams.get("minPrice")) || 0;
+      const maxPrice = Number(searchParams.get("maxPrice")) || 500;
+      const availability = searchParams.get("availability");
+      const date = searchParams.get("date");
 
-      // Filter by search query
-      if (
-        query &&
-        !doctor.name.toLowerCase().includes(query) &&
-        !doctor.specialty?.toLowerCase().includes(query)
-      ) {
+      // Filter by search query (name or specialty)
+      if (query && !doctor.name.toLowerCase().includes(query) && 
+          !doctor.specialty?.toLowerCase().includes(query)) {
         return false;
       }
 
       // Filter by specialty
-      if (specialty && doctor.specialty?.toLowerCase() !== specialty) {
+      if (specialty && specialty !== "all" && doctor.specialty?.toLowerCase() !== specialty) {
         return false;
       }
 
@@ -86,9 +91,9 @@ export function DoctorsList() {
         return false;
       }
 
-      // Filter by gender (assuming doctor gender is the first name Dr.)
+      // Filter by gender
       if (gender) {
-        const doctorGender = doctor.name.includes("Dr. M") ? "male" : "female";
+        const doctorGender = doctor.name.toLowerCase().includes("dr. m") ? "male" : "female";
         if (doctorGender !== gender) return false;
       }
 
@@ -106,6 +111,42 @@ export function DoctorsList() {
           )
         );
         if (!hasInsurance) return false;
+      }
+
+      // Filter by price range
+      const consultationFee = Number(doctor.consultationFee) || 0;
+      if (consultationFee < minPrice || consultationFee > maxPrice) {
+        return false;
+      }
+
+      // Filter by availability
+      if (availability) {
+        const dayOfWeek = date ? format(new Date(date), "EEEE") : undefined;
+        const availableSlot = doctor.availability?.find(
+          (slot: any) => slot.day === dayOfWeek && slot.isAvailable
+        );
+
+        if (!availableSlot) return false;
+
+        const startTime = new Date(`2000-01-01T${availableSlot.startTime}`);
+        const endTime = new Date(`2000-01-01T${availableSlot.endTime}`);
+        const timeToCheck = new Date(`2000-01-01T${
+          availability === "morning" ? "12:00" :
+          availability === "afternoon" ? "15:00" : "18:00"
+        }`);
+
+        if (timeToCheck < startTime || timeToCheck > endTime) {
+          return false;
+        }
+      }
+
+      // Filter by date
+      if (date) {
+        const dayOfWeek = format(new Date(date), "EEEE");
+        const isAvailable = doctor.availability?.some(
+          (slot: any) => slot.day === dayOfWeek && slot.isAvailable
+        );
+        if (!isAvailable) return false;
       }
 
       return true;
@@ -224,86 +265,142 @@ export function DoctorsList() {
               filteredDoctors.map((doctor) => (
                 <Card key={doctor._id} className="overflow-hidden">
                   <div className="flex flex-col md:flex-row">
-                    <div className="p-6 flex flex-col md:flex-row items-start gap-4 flex-1">
-                      <Avatar className="h-20 w-20">
-                        <AvatarImage
-                          src={doctor.avatar || "/placeholder.svg"}
-                          alt={doctor.name}
-                        />
-                        <AvatarFallback>
-                          {doctor.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                    <div className="p-6 flex flex-col md:flex-row items-start gap-6 flex-1">
+                      <div className="flex flex-col items-center gap-2">
+                        <Avatar className="h-24 w-24">
+                          <AvatarImage
+                            src={doctor.avatar || "/placeholder.svg"}
+                            alt={doctor.name}
+                          />
+                          <AvatarFallback>
+                            {doctor.name.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          <span className="font-medium">{doctor.rating || 0}</span>
+                          <span className="text-muted-foreground text-sm">
+                            ({doctor.reviews || 0} reviews)
+                          </span>
+                        </div>
+                      </div>
 
-                      <div className="space-y-2 flex-1">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                          <div>
-                            <h3 className="text-lg font-semibold">
-                              {doctor.name}
-                            </h3>
-                            <p className="text-muted-foreground">
-                              {doctor.specialty || "General Practitioner"}
-                            </p>
+                      <div className="space-y-4 flex-1">
+                        <div className="space-y-1">
+                          <h3 className="text-xl font-semibold">{doctor.name}</h3>
+                          <p className="text-muted-foreground">{doctor.specialty || "General Practitioner"}</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center text-sm">
+                              <MapPin className="h-4 w-4 text-muted-foreground mr-2" />
+                              <span>{doctor.location || "Location not specified"}</span>
+                            </div>
+                            <div className="flex items-center text-sm">
+                              <Award className="h-4 w-4 text-muted-foreground mr-2" />
+                              <div className="flex flex-col">
+                                {(() => {
+                                  try {
+                                    const educationData = typeof doctor.education === 'string' 
+                                      ? JSON.parse(doctor.education) 
+                                      : doctor.education || [];
+                                    
+                                    return educationData.length > 0 ? (
+                                      educationData.map((edu: any, index: number) => (
+                                        <div key={index} className="flex items-center gap-1">
+                                          <span className="font-medium">{edu.degree}</span>
+                                          <span className="text-muted-foreground">from {edu.institution}</span>
+                                          <span className="text-muted-foreground">({edu.year})</span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground">Education not specified</span>
+                                    );
+                                  } catch (error) {
+                                    return <span className="text-muted-foreground">Education not specified</span>;
+                                  }
+                                })()}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Languages</h4>
+                              <div className="flex flex-wrap gap-1">
+                                {(doctor.languages || ["English"]).map((lang: string, index: number) => (
+                                  <Badge key={index} variant="secondary" className="text-xs">
+                                    {lang}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Accepted Insurances</h4>
+                              <div className="flex flex-wrap gap-1">
+                                {(doctor.insurances || []).length > 0 ? (
+                                  (doctor.insurances || []).map((insurance: string, index: number) => (
+                                    <Badge key={index} variant="outline" className="text-xs">
+                                      {insurance}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">No insurances listed</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="flex items-center">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
-                            <span className="font-medium">
-                              {doctor.rating || 0}
-                            </span>
-                            <span className="text-muted-foreground ml-1">
-                              ({doctor.reviews || 0} reviews)
-                            </span>
+                          <div className="space-y-2">
+                            <div className="flex items-center text-sm">
+                              <Clock className="h-4 w-4 text-muted-foreground mr-2" />
+                              <span>
+                                {doctor.availability?.length
+                                  ? `${doctor.availability.filter((slot: any) => slot.isAvailable).length} days available`
+                                  : "No availability set"}
+                              </span>
+                            </div>
+                            <div className="flex items-center text-sm">
+                              <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                              <span>
+                                {doctor.acceptingNewPatients
+                                  ? "Accepting new patients"
+                                  : "Not accepting new patients"}
+                              </span>
+                            </div>
+                            <div className="flex flex-col text-sm">
+                              <div className="flex items-center font-bold">
+                                <Info className="h-4 w-4 text-muted-foreground mr-2" />Bio
+                              </div>
+                              <span className="ml-6">
+                                {doctor.bio}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-                          <div className="flex items-center text-sm">
-                            <MapPin className="h-4 w-4 text-muted-foreground mr-1" />
-                            <span>
-                              {doctor.location || "Location not specified"}
-                            </span>
-                            <span className="text-muted-foreground ml-1">
-                              ({doctor.distance || "N/A"})
-                            </span>
-                          </div>
 
-                          <div className="flex items-center text-sm">
-                            <Award className="h-4 w-4 text-muted-foreground mr-1" />
-                            <span>
-                              {doctor.experience || "Not specified"} experience
-                            </span>
-                          </div>
 
-                          <div className="flex items-center text-sm">
-                            <CheckCircle2 className="h-4 w-4 text-green-500 mr-1" />
-                            <span>
-                              {doctor.acceptingNewPatients
-                                ? "Accepting new patients"
-                                : "Not accepting new patients"}
-                            </span>
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium">Availability</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {doctor.availability?.map((slot: any, index: number) => (
+                              slot.isAvailable && (
+                                <div key={index} className="text-xs bg-slate-50 p-2 rounded-md">
+                                  <p className="font-medium">{slot.day}</p>
+                                  <p className="text-muted-foreground">
+                                    {slot.startTime} - {slot.endTime}
+                                  </p>
+                                </div>
+                              )
+                            ))}
                           </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(doctor.insurances || []).map(
-                            (insurance: string, index: number) => (
-                              <Badge
-                                key={index}
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {insurance}
-                              </Badge>
-                            )
-                          )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-slate-50 border-t md:border-t-0 md:border-l flex flex-col justify-center items-center gap-2 md:min-w-[180px]">
-                      <div className="text-center">
-                        <p className="font-medium text-lg">
+                    <div className="p-6 bg-slate-50 border-t md:border-t-0 md:border-l flex flex-col justify-center items-center gap-4 md:min-w-[200px]">
+                      <div className="text-center space-y-1">
+                        <p className="text-2xl font-bold text-primary">
                           ${doctor.consultationFee || 0}
                         </p>
                         <p className="text-sm text-muted-foreground">

@@ -26,133 +26,77 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { useUser } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
+import { Id } from "@/convex/_generated/dataModel"
 
-// Mock data - would come from Convex in a real app
-const patients = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "sarah.johnson@example.com",
-    phone: "(555) 123-4567",
-    dateOfBirth: "1985-06-15",
-    gender: "Female",
-    address: "123 Main St, Anytown, CA 94321",
-    bloodType: "A+",
-    allergies: ["Penicillin", "Peanuts"],
-    conditions: ["Hypertension", "Asthma"],
-    lastVisit: "2025-03-10",
-    upcomingAppointment: "2025-04-20",
-    medicalHistory: [
-      {
-        date: "2025-03-10",
-        diagnosis: "Hypertension follow-up",
-        treatment: "Continued lisinopril 10mg daily",
-        notes: "Blood pressure well-controlled. Continue current regimen.",
-      },
-      {
-        date: "2024-12-05",
-        diagnosis: "Upper respiratory infection",
-        treatment: "Prescribed amoxicillin 500mg TID for 10 days",
-        notes: "Patient reported fever and cough for 3 days.",
-      },
-    ],
-  },
-  {
-    id: "2",
-    name: "Michael Chen",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "michael.chen@example.com",
-    phone: "(555) 987-6543",
-    dateOfBirth: "1978-09-23",
-    gender: "Male",
-    address: "456 Oak Ave, Somewhere, NY 10001",
-    bloodType: "O-",
-    allergies: ["Sulfa drugs"],
-    conditions: ["Type 2 Diabetes", "High Cholesterol"],
-    lastVisit: "2025-02-18",
-    upcomingAppointment: "2025-05-15",
-    medicalHistory: [
-      {
-        date: "2025-02-18",
-        diagnosis: "Diabetes follow-up",
-        treatment: "Adjusted metformin to 1000mg BID",
-        notes: "HbA1c improved to 6.8%. Continue diet and exercise plan.",
-      },
-      {
-        date: "2024-11-12",
-        diagnosis: "Annual physical",
-        treatment: "Continued atorvastatin 20mg daily",
-        notes: "Cholesterol levels improved. Encouraged more regular exercise.",
-      },
-    ],
-  },
-  {
-    id: "3",
-    name: "Emily Rodriguez",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "emily.rodriguez@example.com",
-    phone: "(555) 456-7890",
-    dateOfBirth: "1992-03-30",
-    gender: "Female",
-    address: "789 Pine St, Elsewhere, TX 75001",
-    bloodType: "B+",
-    allergies: [],
-    conditions: ["Migraine", "Anxiety"],
-    lastVisit: "2025-03-25",
-    upcomingAppointment: "2025-04-28",
-    medicalHistory: [
-      {
-        date: "2025-03-25",
-        diagnosis: "Migraine follow-up",
-        treatment: "Prescribed sumatriptan as needed",
-        notes: "Frequency of migraines reduced with current preventive medication.",
-      },
-      {
-        date: "2024-10-15",
-        diagnosis: "Anxiety",
-        treatment: "Started sertraline 50mg daily",
-        notes: "Patient reported increased stress at work. Recommended counseling.",
-      },
-    ],
-  },
-  {
-    id: "4",
-    name: "David Kim",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "david.kim@example.com",
-    phone: "(555) 789-0123",
-    dateOfBirth: "1965-11-08",
-    gender: "Male",
-    address: "101 Cedar Rd, Nowhere, WA 98001",
-    bloodType: "AB+",
-    allergies: ["Latex", "Shellfish"],
-    conditions: ["Osteoarthritis", "GERD"],
-    lastVisit: "2025-01-20",
-    upcomingAppointment: null,
-    medicalHistory: [
-      {
-        date: "2025-01-20",
-        diagnosis: "Osteoarthritis follow-up",
-        treatment: "Recommended physical therapy, prescribed naproxen as needed",
-        notes: "Joint pain improved with current regimen. Encouraged weight loss.",
-      },
-      {
-        date: "2024-09-05",
-        diagnosis: "GERD",
-        treatment: "Prescribed omeprazole 20mg daily",
-        notes: "Advised dietary modifications and elevation of head during sleep.",
-      },
-    ],
-  },
-]
+interface Patient {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  avatar: string;
+  gender: string;
+  dateOfBirth: string;
+  address: string;
+  bloodType: string;
+  allergies: string[];
+  conditions: string[];
+  lastVisit: string;
+  upcomingAppointment: string | null;
+  medicalHistory: {
+    date: string;
+    diagnosis: string;
+    treatment: string;
+    notes: string;
+  }[];
+}
 
 export function PatientsList() {
-  const [selectedPatient, setSelectedPatient] = useState<(typeof patients)[0] | null>(null)
+  const { user } = useUser()
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [editedNotes, setEditedNotes] = useState("")
 
-  const handleViewPatient = (patient: (typeof patients)[0]) => {
+  // Get the Convex user ID first
+  const convexUser = useQuery(api.users.getUserByClerkId, { clerkId: user?.id as string })
+
+  // Get appointments with patient details
+  const appointments = useQuery(api.appointments.getAppointments, {
+    doctorId: convexUser?._id as string,
+  })
+
+  // Get unique patients from appointments
+  const uniquePatients = appointments?.reduce((acc: Patient[], appointment) => {
+    if (!acc.find(p => p.id === appointment.patientId)) {
+      acc.push({
+        id: appointment.patientId,
+        name: appointment.patient?.name || "Unknown Patient",
+        email: appointment.patient?.email || "No email",
+        phone: appointment.patient?.phone || "No phone",
+        avatar: appointment.patient?.avatar || "/placeholder.svg",
+        gender: appointment.patient?.gender || "Not specified",
+        dateOfBirth: appointment.patient?.dateOfBirth || "Not specified",
+        address: appointment.patient?.address || "Not specified",
+        bloodType: appointment.patient?.bloodType || "Not specified",
+        allergies: appointment.patient?.allergies || [],
+        conditions: appointment.patient?.conditions || [],
+        lastVisit: appointment.date,
+        upcomingAppointment: appointment.status === "confirmed" ? appointment.date : null,
+        medicalHistory: [{
+          date: appointment.date,
+          diagnosis: appointment.reason || "No diagnosis",
+          treatment: appointment.notes || "No treatment specified",
+          notes: appointment.symptoms || "No symptoms recorded"
+        }]
+      });
+    }
+    return acc;
+  }, []);
+
+  const handleViewPatient = (patient: Patient) => {
     setSelectedPatient(patient)
     setEditMode(false)
   }
@@ -170,7 +114,7 @@ export function PatientsList() {
     setEditMode(false)
   }
 
-  if (patients.length === 0) {
+  if (!uniquePatients || uniquePatients.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <User className="h-12 w-12 text-muted-foreground mb-4" />
@@ -184,7 +128,7 @@ export function PatientsList() {
   return (
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {patients.map((patient) => (
+        {uniquePatients.map((patient) => (
           <PatientCard key={patient.id} patient={patient} onViewPatient={handleViewPatient} />
         ))}
       </div>
@@ -350,22 +294,20 @@ export function PatientsList() {
                       </CardHeader>
                       <CardContent>
                         <ScrollArea className="h-[200px]">
-                          {selectedPatient.medicalHistory.length > 0 ? (
-                            <div className="space-y-4">
-                              {selectedPatient.medicalHistory.map((record, index) => (
-                                <div key={index} className="border-b pb-3 last:border-0 last:pb-0">
+                          <div className="space-y-4 pr-4">
+                            {appointments?.filter(app => app.patientId === selectedPatient?.id)
+                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                              .map((appointment) => (
+                                <div key={appointment._id} className="border-b pb-3 last:border-0 last:pb-0">
                                   <div className="flex justify-between">
-                                    <p className="font-medium">{record.diagnosis}</p>
-                                    <p className="text-sm text-muted-foreground">{record.date}</p>
+                                    <p className="font-medium">{appointment.reason || "Office Visit"}</p>
+                                    <p className="text-sm text-muted-foreground">{appointment.date}</p>
                                   </div>
-                                  <p className="text-sm mt-1">{record.treatment}</p>
-                                  <p className="text-sm text-muted-foreground mt-1">{record.notes}</p>
+                                  <p className="text-sm mt-1">{appointment.notes || "No treatment specified"}</p>
+                                  <p className="text-sm text-muted-foreground mt-1">{appointment.symptoms || "No symptoms recorded"}</p>
                                 </div>
                               ))}
                             </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No medical history available.</p>
-                          )}
                         </ScrollArea>
                       </CardContent>
                     </Card>
@@ -382,45 +324,32 @@ export function PatientsList() {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="space-y-4">
-                          {selectedPatient.upcomingAppointment ? (
-                            <div className="border-b pb-3">
+                        <ScrollArea className="h-[300px]">
+                          <div className="space-y-4 pr-4">
+                            {appointments?.filter(app => app.patientId === selectedPatient?.id)
+                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                              .map((appointment) => (
+                              <div key={appointment._id} className="border-b pb-3 last:border-0 last:pb-0">
                               <div className="flex justify-between">
                                 <div>
-                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Upcoming</Badge>
-                                  <p className="font-medium mt-1">Regular Check-up</p>
+                                    <Badge className={appointment.status === "confirmed" ? "bg-green-100 text-green-800 hover:bg-green-100" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"}>
+                                      {appointment.status}
+                                    </Badge>
+                                    <p className="font-medium mt-1">{appointment.reason || "Office Visit"}</p>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {appointment.type} • {appointment.duration} min
+                                    </p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-sm text-muted-foreground">{selectedPatient.upcomingAppointment}</p>
-                                  <p className="text-sm text-muted-foreground">10:30 AM</p>
+                                    <p className="text-sm text-muted-foreground">{appointment.date}</p>
+                                    <p className="text-sm text-muted-foreground">{appointment.time}</p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No upcoming appointments.</p>
-                          )}
-
-                          <div className="border-b pb-3">
-                            <div className="flex justify-between">
-                              <div>
-                                <Badge variant="outline">Past</Badge>
-                                <p className="font-medium mt-1">
-                                  {selectedPatient.medicalHistory[0]?.diagnosis || "Office Visit"}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm text-muted-foreground">{selectedPatient.lastVisit}</p>
-                                <p className="text-sm text-muted-foreground">09:15 AM</p>
-                              </div>
-                            </div>
+                            ))}
                           </div>
-                        </div>
+                        </ScrollArea>
                       </CardContent>
-                      <CardFooter>
-                        <Button variant="outline" className="w-full">
-                          View All Appointments
-                        </Button>
-                      </CardFooter>
                     </Card>
                   </TabsContent>
                 </Tabs>
@@ -440,11 +369,33 @@ export function PatientsList() {
 }
 
 interface PatientCardProps {
-  patient: (typeof patients)[0]
-  onViewPatient: (patient: (typeof patients)[0]) => void
+  patient: Patient;
+  onViewPatient: (patient: Patient) => void;
 }
 
 function PatientCard({ patient, onViewPatient }: PatientCardProps) {
+  const router = useRouter()
+  const createConversation = useMutation(api.conversations.createDoctorPatientConversation)
+  const { user } = useUser()
+  const convexUser = useQuery(api.users.getUserByClerkId, { clerkId: user?.id || "" })
+
+  const handleSendMessage = async () => {
+    if (!user?.id || !convexUser) return
+
+    try {
+      // Create or get existing conversation
+      const conversationId = await createConversation({
+        doctorId: convexUser._id,
+        patientId: patient.id as Id<"users">,
+      })
+
+      // Navigate to conversations with the new conversation selected
+      router.push(`/doctor/conversations?conversation=${conversationId}`)
+    } catch (error) {
+      console.error("Error creating conversation:", error)
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -470,7 +421,7 @@ function PatientCard({ patient, onViewPatient }: PatientCardProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onViewPatient(patient)}>View Details</DropdownMenuItem>
               <DropdownMenuItem>Schedule Appointment</DropdownMenuItem>
-              <DropdownMenuItem>Send Message</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSendMessage}>Send Message</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive">
                 Remove Patient

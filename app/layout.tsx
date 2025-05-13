@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ConvexClientProvider } from "@/components/convex-client-provider"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { Toaster } from "@/components/ui/toaster"
+import { AssistantProvider } from "@/components/ai-assistant/assistant-provider"
+import { AIMedicalAssistant } from "@/components/ai-assistant/ai-medical-assistant"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -32,8 +34,11 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <ConvexClientProvider>
-              <AuthLayout>{children}</AuthLayout>
-              <Toaster />
+              <AssistantProvider>
+                <AuthLayout>{children}</AuthLayout>
+                <AIMedicalAssistant />
+                <Toaster />
+              </AssistantProvider>
             </ConvexClientProvider>
           </ThemeProvider>
         </body>

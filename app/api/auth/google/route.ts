@@ -11,6 +11,7 @@ export async function POST() {
       "https://www.googleapis.com/auth/gmail.send",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/calendar.events",
     ].join(" ");
 
     // Create the Google OAuth URL

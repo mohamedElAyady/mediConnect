@@ -84,7 +84,7 @@ export function AvailabilitySettings() {
         day,
         startTime: "09:00",
         endTime: "17:00",
-        isAvailable: true,
+        isAvailable: false,
       })),
     },
   });
@@ -101,7 +101,7 @@ export function AvailabilitySettings() {
             day,
             startTime: "09:00",
             endTime: "17:00",
-            isAvailable: true,
+            isAvailable: false,
           }
         );
       });
@@ -179,7 +179,7 @@ export function AvailabilitySettings() {
                           </FormDescription>
                           <FormControl>
                             <Switch
-                              checked={field.value}
+                              checked={field.value === undefined ? false : field.value}
                               onCheckedChange={field.onChange}
                             />
                           </FormControl>

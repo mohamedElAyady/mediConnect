@@ -28,7 +28,7 @@ const practiceFormSchema = z.object({
   insurances: z.string().min(2, {
     message: "Insurance information is required.",
   }),
-  acceptingNewPatients: z.boolean().default(true),
+  acceptingNewPatients: z.boolean(),
 })
 
 type PracticeFormValues = z.infer<typeof practiceFormSchema>
@@ -37,6 +37,7 @@ export function PracticeSettings() {
   const { user } = useUser()
   const updateUser = useMutation(api.users.updateUser)
   const userData = useQuery(api.users.getUser, { clerkId: user?.id ?? "" })
+  const [newInsurance, setNewInsurance] = useState("")
 
   const form = useForm<PracticeFormValues>({
     resolver: zodResolver(practiceFormSchema),
@@ -85,20 +86,21 @@ export function PracticeSettings() {
   const addInsurance = () => {
     if (!newInsurance.trim()) return
 
-    const currentInsurances = form.getValues("insurances") || []
-    if (!currentInsurances.includes(newInsurance)) {
-      form.setValue("insurances", [...currentInsurances, newInsurance])
+    const currentInsurances = form.getValues("insurances") || ""
+    const insurancesList = currentInsurances ? currentInsurances.split(", ") : []
+    if (!insurancesList.includes(newInsurance)) {
+      const updatedInsurances = [...insurancesList, newInsurance].join(", ")
+      form.setValue("insurances", updatedInsurances)
     }
 
     setNewInsurance("")
   }
 
   const removeInsurance = (insurance: string) => {
-    const currentInsurances = form.getValues("insurances") || []
-    form.setValue(
-      "insurances",
-      currentInsurances.filter((i) => i !== insurance),
-    )
+    const currentInsurances = form.getValues("insurances") || ""
+    const insurancesList = currentInsurances ? currentInsurances.split(", ") : []
+    const updatedInsurances = insurancesList.filter((i) => i !== insurance).join(", ")
+    form.setValue("insurances", updatedInsurances)
   }
 
   if (!userData) {

@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { Id } from "./_generated/dataModel"
+import { api } from "./_generated/api"
 
 export const getAppointments = query({
     args: {
@@ -55,6 +56,13 @@ export const getAppointments = query({
                             name: patient.name,
                             email: patient.email,
                             avatar: patient.avatar,
+                            phone: patient.phone,
+                            gender: patient.gender,
+                            dateOfBirth: patient.dateOfBirth,
+                            address: patient.address,
+                            bloodType: patient.bloodType,
+                            allergies: patient.allergies,
+                            conditions: patient.conditions,
                         }
                         : null,
                     doctor: doctor
@@ -87,20 +95,64 @@ export const createAppointment = mutation({
         reason: v.string(),
     },
     handler: async (ctx, args) => {
+        // Get patient and doctor details
+        const patient = await ctx.db
+            .query("users")
+            .withIndex("by_id", (q) => q.eq("_id", args.patientId as Id<"users">))
+            .first();
+
+        const doctor = await ctx.db
+            .query("users")
+            .withIndex("by_id", (q) => q.eq("_id", args.doctorId as Id<"users">))
+            .first();
+
+        if (!patient || !doctor) {
+            throw new Error("Patient or doctor not found");
+        }
+
+        // Format time to ensure it's stored exactly as provided
+        const [hours, minutes] = args.time.split(":");
+        const formattedTime = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+
+        // Create the appointment
         const appointmentId = await ctx.db.insert("appointments", {
             patientId: args.patientId,
             doctorId: args.doctorId,
             date: args.date,
-            time: args.time,
+            time: formattedTime,
             type: args.type,
             status: args.status,
             duration: args.duration,
             notes: args.notes,
             symptoms: args.symptoms,
             reason: args.reason,
-        })
+        });
 
-        return appointmentId
+        // Create Google Calendar event
+        try {
+            await ctx.scheduler.runAfter(0, api.integrations.createGoogleCalendarEvent, {
+                userId: args.doctorId as Id<"users">,
+                appointment: {
+                    patientId: args.patientId,
+                    doctorId: args.doctorId,
+                    date: args.date,
+                    time: args.time,
+                    type: args.type,
+                    duration: args.duration,
+                    reason: args.reason,
+                    patientEmail: patient.email,
+                    patientName: patient.name,
+                    doctorEmail: doctor.email,
+                    doctorName: doctor.name,
+                    appointmentId: appointmentId,
+                },
+            });
+        } catch (error) {
+            console.error("Failed to create Google Calendar event:", error);
+            // Don't throw error here, as the appointment was created successfully
+        }
+
+        return appointmentId;
     },
 })
 
@@ -116,6 +168,7 @@ export const updateAppointment = mutation({
         symptoms: v.optional(v.string()),
         reason: v.optional(v.string()),
         cancellationReason: v.optional(v.string()),
+        meetingLink: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const { id, ...rest } = args
