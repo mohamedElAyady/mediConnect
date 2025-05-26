@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -12,6 +12,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { Upload, X } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { useUser } from "@clerk/nextjs"
 
 const personalInfoSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -22,43 +25,106 @@ type PersonalInfoValues = z.infer<typeof personalInfoSchema>
 
 export default function PersonalInformation() {
   const { toast } = useToast()
+  const { user } = useUser()
   const [avatar, setAvatar] = useState<string | null>("/placeholder.svg?height=100&width=100")
   const [isUploading, setIsUploading] = useState(false)
-
-  // Mock data - in a real app, this would come from your database
-  const defaultValues: Partial<PersonalInfoValues> = {
-    name: "John Doe",
-    bio: "I'm a patient at MediConnect, looking for quality healthcare services.",
-  }
+  const updatePatientPersonalInfo = useMutation(api.users.updatePatientPersonalInfo)
+  const generateUploadUrl = useMutation(api.upload.generateUploadUrl)
+  const getImageUrl = useMutation(api.upload.getImageUrl)
+  const patientSettings = useQuery(api.users.getPatientSettings, user?.id ? { clerkId: user.id } : "skip")
 
   const form = useForm<PersonalInfoValues>({
     resolver: zodResolver(personalInfoSchema),
-    defaultValues,
+    defaultValues: {
+      name: "",
+      bio: "",
+    },
     mode: "onChange",
   })
 
-  function onSubmit(data: PersonalInfoValues) {
-    // In a real app, you would save this data to your database
-    console.log(data)
+  useEffect(() => {
+    if (patientSettings?.personal) {
+      form.reset({
+        name: patientSettings.personal.name,
+        bio: patientSettings.personal.bio || "",
+      })
+      setAvatar(patientSettings.personal.avatar || "/placeholder.svg?height=100&width=100")
+    }
+  }, [patientSettings, form])
 
-    toast({
-      title: "Profile updated",
-      description: "Your personal information has been updated successfully.",
-    })
+  async function onSubmit(data: PersonalInfoValues) {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update your profile.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await updatePatientPersonalInfo({
+        clerkId: user.id,
+        name: data.name,
+        bio: data.bio,
+        avatar: avatar || undefined,
+      })
+
+      toast({
+        title: "Profile updated",
+        description: "Your personal information has been updated successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update your profile. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleAvatarUpload = () => {
-    // Simulate file upload
-    setIsUploading(true)
-    setTimeout(() => {
-      setAvatar("/placeholder.svg?height=100&width=100&text=JD")
-      setIsUploading(false)
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      setIsUploading(true)
+
+      // Get upload URL
+      const uploadUrl = await generateUploadUrl()
+
+      // Upload the file
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      })
+
+      if (!result.ok) {
+        throw new Error("Failed to upload image")
+      }
+
+      const { storageId } = await result.json()
+
+      // Get the URL for the uploaded image
+      const imageUrl = await getImageUrl({ storageId })
+
+      // Update the avatar state with the new URL
+      setAvatar(imageUrl)
 
       toast({
         title: "Avatar uploaded",
         description: "Your profile picture has been updated successfully.",
       })
-    }, 1500)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const removeAvatar = () => {
@@ -70,6 +136,10 @@ export default function PersonalInformation() {
     })
   }
 
+  if (!user) {
+    return null
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -78,34 +148,33 @@ export default function PersonalInformation() {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="relative">
-            <Avatar className="h-24 w-24">
+          <div className="relative group">
+            <Avatar className="h-24 w-24 transition-opacity group-hover:opacity-80">
               <AvatarImage src={avatar || ""} alt="Profile picture" />
               <AvatarFallback>JD</AvatarFallback>
+              <input
+                type="file"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
             </Avatar>
-            <div className="absolute -bottom-2 -right-2 flex gap-1">
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-8 w-8 rounded-full"
-                onClick={handleAvatarUpload}
-                disabled={isUploading}
+            {avatar && avatar !== "/placeholder.svg?height=100&width=100" && (
+              <Button 
+                variant="destructive" 
+                size="icon" 
+                className="h-8 w-8 rounded-full absolute -bottom-2 -right-2"
+                onClick={removeAvatar}
               >
-                <Upload className="h-4 w-4" />
-                <span className="sr-only">Upload avatar</span>
+                <X className="h-4 w-4" />
+                <span className="sr-only">Remove avatar</span>
               </Button>
-              {avatar && avatar.includes("text=JD") && (
-                <Button variant="destructive" size="icon" className="h-8 w-8 rounded-full" onClick={removeAvatar}>
-                  <X className="h-4 w-4" />
-                  <span className="sr-only">Remove avatar</span>
-                </Button>
-              )}
-            </div>
+            )}
           </div>
           <div>
             <h3 className="text-lg font-medium">Profile Picture</h3>
             <p className="text-sm text-muted-foreground">
-              This will be displayed on your profile and in discussions with doctors
+              Click on the avatar to upload a new profile picture
             </p>
           </div>
         </div>

@@ -13,6 +13,7 @@ export default defineSchema({
     avatar: v.optional(v.string()),
     rating: v.optional(v.number()),
     isPublished: v.optional(v.boolean()),
+    isDeleted: v.optional(v.boolean()),
     reviews: v.optional(v.number()),
     distance: v.optional(v.string()),
     education: v.optional(v.string()),

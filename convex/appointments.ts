@@ -205,3 +205,76 @@ export const deleteAppointment = mutation({
         return args.id
     },
 })
+
+export const getPatientAppointments = query({
+    args: {
+        patientId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const appointments = await ctx.db
+            .query("appointments")
+            .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
+            .collect();
+
+        // Add doctor details
+        const appointmentsWithDoctors = await Promise.all(
+            appointments.map(async (appointment) => {
+                const doctor = await ctx.db
+                    .query("users")
+                    .withIndex("by_id", (q) => q.eq("_id", appointment.doctorId as Id<"users">))
+                    .first();
+
+                return {
+                    ...appointment,
+                    doctorName: doctor?.name || "Unknown Doctor",
+                    doctorSpecialty: doctor?.specialty || "Unknown Specialty",
+                    doctorAvatar: doctor?.avatar || "/placeholder.svg",
+                };
+            })
+        );
+
+        return appointmentsWithDoctors;
+    },
+});
+
+export const cancelAppointment = mutation({
+    args: {
+        appointmentId: v.id("appointments"),
+        reason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const appointment = await ctx.db.get(args.appointmentId);
+        if (!appointment) {
+            throw new Error("Appointment not found");
+        }
+
+        await ctx.db.patch(args.appointmentId, {
+            status: "Cancelled",
+            cancellationReason: args.reason,
+        });
+
+        return args.appointmentId;
+    },
+});
+
+export const rescheduleAppointment = mutation({
+    args: {
+        appointmentId: v.id("appointments"),
+        newDate: v.string(),
+        newTime: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const appointment = await ctx.db.get(args.appointmentId);
+        if (!appointment) {
+            throw new Error("Appointment not found");
+        }
+
+        await ctx.db.patch(args.appointmentId, {
+            date: args.newDate,
+            time: args.newTime,
+            status: "Pending", // Reset status to pending for doctor approval
+        });
+
+        return args.appointmentId;
+    },
+});

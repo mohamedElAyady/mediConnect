@@ -65,18 +65,14 @@ export const getUser = query({
 })
 
 export const getUserByClerkId = query({
-  args: {
-    clerkId: v.string(),
-  },
+  args: { clerkId: v.string() },
   handler: async (ctx, args) => {
-    const user = await ctx.db
+    return await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-    
-    return user;
+      .first()
   },
-});
+})
 
 export const updateUser = mutation({
   args: {
@@ -389,3 +385,21 @@ export const updatePatientPreferences = mutation({
     return user._id
   },
 })
+
+export const softDeleteUser = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await ctx.db.patch(args.userId, {
+      isDeleted: true
+    });
+
+    return args.userId;
+  },
+});

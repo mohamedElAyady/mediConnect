@@ -8,4 +8,3 @@ export default function AdminLayout({
 }) {
   return <SidebarLayout role="admin">{children}</SidebarLayout>
 }
-

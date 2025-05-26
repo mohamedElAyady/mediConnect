@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -16,6 +16,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { useUser } from "@clerk/nextjs"
 
 const medicalInfoSchema = z.object({
   gender: z.string().min(1, { message: "Please select a gender." }),
@@ -29,34 +32,67 @@ type MedicalInfoValues = z.infer<typeof medicalInfoSchema>
 
 export default function MedicalInformation() {
   const { toast } = useToast()
-  const [allergies, setAllergies] = useState<string[]>(["Penicillin", "Peanuts"])
+  const { user } = useUser()
+  const [allergies, setAllergies] = useState<string[]>([])
   const [newAllergy, setNewAllergy] = useState("")
-  const [conditions, setConditions] = useState<string[]>(["Asthma", "Hypertension"])
+  const [conditions, setConditions] = useState<string[]>([])
   const [newCondition, setNewCondition] = useState("")
-
-  // Mock data - in a real app, this would come from your database
-  const defaultValues: Partial<MedicalInfoValues> = {
-    gender: "male",
-    dateOfBirth: new Date("1985-05-15"),
-    bloodType: "O+",
-  }
+  const updatePatientMedicalInfo = useMutation(api.users.updatePatientMedicalInfo)
+  const patientSettings = useQuery(api.users.getPatientSettings, user?.id ? { clerkId: user.id } : "skip")
 
   const form = useForm<MedicalInfoValues>({
     resolver: zodResolver(medicalInfoSchema),
-    defaultValues,
+    defaultValues: {
+      gender: "",
+      dateOfBirth: undefined,
+      bloodType: "",
+    },
     mode: "onChange",
   })
 
-  function onSubmit(data: MedicalInfoValues) {
-    // In a real app, you would save this data to your database
-    console.log(data)
-    console.log("Allergies:", allergies)
-    console.log("Conditions:", conditions)
+  useEffect(() => {
+    if (patientSettings?.medical) {
+      form.reset({
+        gender: patientSettings.medical.gender || "",
+        dateOfBirth: patientSettings.medical.dateOfBirth ? new Date(patientSettings.medical.dateOfBirth) : undefined,
+        bloodType: patientSettings.medical.bloodType || "",
+      })
+      setAllergies(patientSettings.medical.allergies || [])
+      setConditions(patientSettings.medical.conditions || [])
+    }
+  }, [patientSettings, form])
 
-    toast({
-      title: "Medical information updated",
-      description: "Your medical information has been updated successfully.",
-    })
+  async function onSubmit(data: MedicalInfoValues) {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update your profile.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await updatePatientMedicalInfo({
+        clerkId: user.id,
+        gender: data.gender,
+        dateOfBirth: data.dateOfBirth.toISOString(),
+        bloodType: data.bloodType,
+        allergies,
+        conditions,
+      })
+
+      toast({
+        title: "Medical information updated",
+        description: "Your medical information has been updated successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update your medical information. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const addAllergy = () => {
@@ -81,6 +117,10 @@ export default function MedicalInformation() {
     setConditions(conditions.filter((c) => c !== condition))
   }
 
+  if (!user) {
+    return null
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -97,7 +137,7 @@ export default function MedicalInformation() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Gender</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select your gender" />
@@ -153,7 +193,7 @@ export default function MedicalInformation() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Blood Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select your blood type" />

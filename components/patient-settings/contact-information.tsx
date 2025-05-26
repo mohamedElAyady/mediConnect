@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -9,6 +10,9 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { Lock } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { useUser } from "@clerk/nextjs"
 
 const contactInfoSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }).optional(),
@@ -21,29 +25,65 @@ type ContactInfoValues = z.infer<typeof contactInfoSchema>
 
 export default function ContactInformation() {
   const { toast } = useToast()
-
-  // Mock data - in a real app, this would come from your database
-  const defaultValues: Partial<ContactInfoValues> = {
-    email: "john.doe@example.com",
-    phone: "555-123-4567",
-    address: "123 Main St, Apt 4B",
-    location: "New York, NY",
-  }
+  const { user } = useUser()
+  const updatePatientContactInfo = useMutation(api.users.updatePatientContactInfo)
+  const patientSettings = useQuery(api.users.getPatientSettings, user?.id ? { clerkId: user.id } : "skip")
 
   const form = useForm<ContactInfoValues>({
     resolver: zodResolver(contactInfoSchema),
-    defaultValues,
+    defaultValues: {
+      email: "",
+      phone: "",
+      address: "",
+      location: "",
+    },
     mode: "onChange",
   })
 
-  function onSubmit(data: ContactInfoValues) {
-    // In a real app, you would save this data to your database
-    console.log(data)
+  useEffect(() => {
+    if (patientSettings?.contact) {
+      form.reset({
+        email: patientSettings.contact.email,
+        phone: patientSettings.contact.phone || "",
+        address: patientSettings.contact.address || "",
+        location: patientSettings.contact.location || "",
+      })
+    }
+  }, [patientSettings, form])
 
-    toast({
-      title: "Contact information updated",
-      description: "Your contact details have been updated successfully.",
-    })
+  async function onSubmit(data: ContactInfoValues) {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update your profile.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await updatePatientContactInfo({
+        clerkId: user.id,
+        phone: data.phone,
+        address: data.address,
+        location: data.location,
+      })
+
+      toast({
+        title: "Contact information updated",
+        description: "Your contact details have been updated successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update your contact information. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (!user) {
+    return null
   }
 
   return (

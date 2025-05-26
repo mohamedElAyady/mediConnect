@@ -1,6 +1,6 @@
 import type { Message } from "@/hooks/use-assistant"
 
-const OPENROUTER_API_KEY = "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"
+const OPENROUTER_API_KEY = "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"
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 // This is a simulated API call to a medical AI service
@@ -16,7 +16,7 @@ export async function getMedicalResponse(query: string, previousMessages: Messag
         "X-Title": "MediConnect Medical Assistant"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4.1",
+        model: "google/gemma-3-27b-it:free",
         messages: [
           {
             role: "system",

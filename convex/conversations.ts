@@ -40,7 +40,7 @@ export const getUserConversations = query({
           lastMessage: conv.lastMessage,
           lastMessageTime: conv.lastMessageTime,
           unreadCount: conv.participant1Id === user._id ? conv.unreadCount1 : conv.unreadCount2,
-          online: false,
+          online: true,
           isFavorite: conv.participant1Id === user._id ? conv.isFavorite1 : conv.isFavorite2,
           lastSeen: conv.participant1Id === user._id ? conv.lastSeen1 : conv.lastSeen2,
           nextAppointment: conv.nextAppointment || null,
